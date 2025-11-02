@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pixelated Gradient Book Cover Designer</title>
+  <style>
+    :root {
+      --bg: #0b0b10;
+      --panel: #151520;
+      --muted: #8b90a1;
+      --text: #e8eaf0;
+      --accent: #5b8cff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    h1 { font-size: 18px; margin: 0 0 12px; font-weight: 650; }
+    .app { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+    .panel { background: var(--panel); border: 1px solid #1e2130; border-radius: 14px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+    .controls { display: grid; gap: 14px; }
+    .row { display: grid; gap: 8px; }
+    .label { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 100%; }
+    .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .color { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 10px; background: #0f111a; border: 1px solid #24293d; border-radius: 10px; }
+    .color input[type="color"] { width: 36px; height: 32px; padding: 0; border: none; background: transparent; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    button { appearance: none; background: var(--accent); color: white; border: none; padding: 10px 12px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #2a2f45; color: var(--text); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .stageWrap { display: grid; gap: 10px; }
+    .stageBar { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
+    .stage { width: 100%; background: #0f111a; border: 1px solid #24293d; border-radius: 14px; padding: 16px; display: grid; place-items: center; min-height: 300px; }
+    .coverFrame { width: min(900px, 100%); }
+    .meta { color: var(--muted); font-size: 12px; }
+    .tip { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .gridPreview { display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="panel">
+      <h1>🎨 Pixelated Gradient Cover</h1>
+      <div class="controls">
+        <div class="row">
+          <div class="label"><span>Aspect ratio (width / height)</span><span><span id="ratioVal">1.50</span> : 1</span></div>
+          <input id="ratio" type="range" min="0.5" max="2.0" step="0.01" value="1.5" />
+        </div>
+        <div class="row">
+          <div class="label"><span>Tile size (px)</span><span id="tileVal">20</span></div>
+          <input id="tile" type="range" min="4" max="200" step="1" value="20" />
+        </div>
+        <div class="row">
+          <div class="label"><span>Cover width (px)</span><span id="widthVal">800</span></div>
+          <input id="widthPx" type="range" min="300" max="1600" step="10" value="800" />
+        </div>
+        <div class="row">
+          <div class="label"><span>Corner colors</span><span class="meta">Top-Left / Top-Right / Bottom-Left / Bottom-Right</span></div>
+          <div class="colors">
+            <div class="color"><input id="c_tl" type="color" value="#f72585" /><span>Top‑Left</span></div>
+            <div class="color"><input id="c_tr" type="color" value="#4361ee" /><span>Top‑Right</span></div>
+            <div class="color"><input id="c_bl" type="color" value="#b5179e" /><span>Bottom‑Left</span></div>
+            <div class="color"><input id="c_br" type="color" value="#4cc9f0" /><span>Bottom‑Right</span></div>
+          </div>
+        </div>
+        <div class="btns">
+          <button id="download">Download SVG</button>
+          <button id="copySVG" class="secondary">Copy SVG</button>
+          <button id="randomize" class="secondary">Randomize colors</button>
+        </div>
+        <p class="tip">Tiles are perfect squares. Each tile’s color is the exact average of the 4‑corner bilinear gradient over that tile (equivalently, the gradient sampled at the tile center).</p>
+      </div>
+    </div>
+
+    <div class="stageWrap">
+      <div class="stageBar">
+        <div>Preview</div>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="stage">
+        <!-- Live SVG goes here -->
+        <div class="coverFrame" id="frame"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const els = {
+      ratio: document.getElementById('ratio'),
+      tile: document.getElementById('tile'),
+      widthPx: document.getElementById('widthPx'),
+      c_tl: document.getElementById('c_tl'),
+      c_tr: document.getElementById('c_tr'),
+      c_bl: document.getElementById('c_bl'),
+      c_br: document.getElementById('c_br'),
+      ratioVal: document.getElementById('ratioVal'),
+      tileVal: document.getElementById('tileVal'),
+      widthVal: document.getElementById('widthVal'),
+      frame: document.getElementById('frame'),
+      meta: document.getElementById('meta'),
+      download: document.getElementById('download'),
+      copySVG: document.getElementById('copySVG'),
+      randomize: document.getElementById('randomize'),
+    };
+
+    function hexToRgb(hex) {
+      const m = hex.trim().replace('#','');
+      const v = m.length === 3 ? m.split('').map(ch => ch+ch).join('') : m;
+      const int = parseInt(v,16);
+      return [ (int>>16)&255, (int>>8)&255, int&255 ];
+    }
+    function rgbToHex([r,g,b]) {
+      const toHex = (n)=> n.toString(16).padStart(2,'0');
+      return `#${toHex(Math.max(0,Math.min(255,Math.round(r))))}${toHex(Math.max(0,Math.min(255,Math.round(g))))}${toHex(Math.max(0,Math.min(255,Math.round(b))))}`;
+    }
+
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    function lerpColor(c1,c2,t){ return [ lerp(c1[0],c2[0],t), lerp(c1[1],c2[1],t), lerp(c1[2],c2[2],t) ]; }
+
+    // Bilinear interpolation among four corner colors
+    function bilinear(u,v, TL, TR, BL, BR){
+      const top = lerpColor(TL, TR, u);
+      const bottom = lerpColor(BL, BR, u);
+      return lerpColor(top, bottom, v);
+    }
+
+    function randomColor(){
+      return '#'+Array.from({length:6},()=> '89abcdef'[Math.floor(Math.random()*8)]).join('');
+    }
+
+    function buildSVG() {
+      const ratio = parseFloat(els.ratio.value); // width / height
+      const widthPx = Math.round(parseFloat(els.widthPx.value));
+      const heightPx = Math.round(widthPx / ratio);
+      const tile = Math.max(1, Math.round(parseFloat(els.tile.value)));
+
+      // number of tiles (ensure square tiles and full coverage by trimming to fit)
+      const cols = Math.max(1, Math.floor(widthPx / tile));
+      const rows = Math.max(1, Math.floor(heightPx / tile));
+      const actualW = cols * tile;
+      const actualH = rows * tile;
+
+      const TL = hexToRgb(els.c_tl.value);
+      const TR = hexToRgb(els.c_tr.value);
+      const BL = hexToRgb(els.c_bl.value);
+      const BR = hexToRgb(els.c_br.value);
+
+      // Create SVG element string (faster than many DOM ops)
+      let svg = '';
+      svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${actualW}" height="${actualH}" viewBox="0 0 ${actualW} ${actualH}" shape-rendering="crispEdges" role="img" aria-label="Pixelated gradient book cover">`;
+      // background rect
+      svg += `<rect width="100%" height="100%" fill="${rgbToHex(bilinear(0.5,0.5,TL,TR,BL,BR))}" opacity="0"/>`;
+
+      for (let j = 0; j < rows; j++) {
+        const cy = (j + 0.5) / rows; // normalized center y
+        for (let i = 0; i < cols; i++) {
+          const cx = (i + 0.5) / cols; // normalized center x
+          const rgb = bilinear(cx, cy, TL, TR, BL, BR);
+          const hex = rgbToHex(rgb);
+          const x = i * tile;
+          const y = j * tile;
+          svg += `<rect x="${x}" y="${y}" width="${tile}" height="${tile}" fill="${hex}"/>`;
+        }
+      }
+      svg += '</svg>';
+      return { svg, width: actualW, height: actualH, cols, rows };
+    }
+
+    function render() {
+      const { svg, width, height, cols, rows } = buildSVG();
+      els.frame.innerHTML = svg;
+      els.ratioVal.textContent = parseFloat(els.ratio.value).toFixed(2);
+      els.tileVal.textContent = parseInt(els.tile.value, 10);
+      els.widthVal.textContent = parseInt(els.widthPx.value, 10);
+      els.meta.textContent = `${width}×${height}px • ${cols}×${rows} tiles`;
+    }
+
+    function downloadSVG(){
+      const { svg } = buildSVG();
+      const blob = new Blob([svg], {type: 'image/svg+xml'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cover-pixelated.svg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 5000);
+    }
+
+    async function copySVG(){
+      const { svg } = buildSVG();
+      try {
+        await navigator.clipboard.writeText(svg);
+        notify('SVG copied to clipboard ✅');
+      } catch (e) {
+        notify('Clipboard blocked. Use Download instead.');
+      }
+    }
+
+    function notify(msg){
+      const n = document.createElement('div');
+      n.textContent = msg;
+      n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)';
+      n.style.background='#1f2336'; n.style.color='white'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #2b3050';
+      n.style.boxShadow='0 8px 24px rgba(0,0,0,.35)'; n.style.zIndex='9999';
+      document.body.appendChild(n);
+      setTimeout(()=> n.remove(), 2200);
+    }
+
+    // Randomize colors with nice-ish palette spread
+    function randomizeColors(){
+      const base = Math.floor(Math.random()*360);
+      const toHex = (h,s,l)=> {
+        // hsl to rgb
+        s/=100; l/=100; const k = n => (n + h/30) % 12;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+        const r = Math.round(255 * f(0));
+        const g = Math.round(255 * f(8));
+        const b = Math.round(255 * f(4));
+        return rgbToHex([r,g,b]);
+      };
+      els.c_tl.value = toHex((base+0)%360, 80, 60);
+      els.c_tr.value = toHex((base+50)%360, 80, 60);
+      els.c_bl.value = toHex((base+200)%360, 80, 60);
+      els.c_br.value = toHex((base+270)%360, 80, 60);
+      render();
+    }
+
+    // Event bindings
+    [els.ratio, els.tile, els.widthPx, els.c_tl, els.c_tr, els.c_bl, els.c_br].forEach(el => el.addEventListener('input', render));
+    els.download.addEventListener('click', downloadSVG);
+    els.copySVG.addEventListener('click', copySVG);
+    els.randomize.addEventListener('click', randomizeColors);
+
+    // Initial draw
+    render();
+  </script>
+</body>
+</html>
